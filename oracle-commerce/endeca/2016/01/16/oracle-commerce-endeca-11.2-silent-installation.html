@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.4.0 -->
+<title>Oracle Commerce Endeca 11.2 Silent Installation | Hallatech</title>
+<meta name="generator" content="Jekyll v3.7.3" />
+<meta property="og:title" content="Oracle Commerce Endeca 11.2 Silent Installation" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="I had some issues getting the silent installation to work for the new Endeca installations for the newly released 11.2." />
+<meta property="og:description" content="I had some issues getting the silent installation to work for the new Endeca installations for the newly released 11.2." />
+<link rel="canonical" href="http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html" />
+<meta property="og:url" content="http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html" />
+<meta property="og:site_name" content="Hallatech" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2016-01-16T00:00:00+09:00" />
+<script type="application/ld+json">
+{"description":"I had some issues getting the silent installation to work for the new Endeca installations for the newly released 11.2.","@type":"BlogPosting","url":"http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html","headline":"Oracle Commerce Endeca 11.2 Silent Installation","dateModified":"2016-01-16T00:00:00+09:00","datePublished":"2016-01-16T00:00:00+09:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html"},"@context":"http://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="http://localhost:4000/feed.xml" title="Hallatech" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Hallatech</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+              <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+              <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Oracle Commerce Endeca 11.2 Silent Installation</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="2016-01-16T00:00:00+09:00" itemprop="datePublished">Jan 16, 2016
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>I had some issues getting the silent installation to work for the new <code class="highlighter-rouge">Endeca</code> installations for the newly released 11.2.</p>
+
+<p>Oracle have been upgrading the installer processes with each release lately. As of 11.2 <code class="highlighter-rouge">MDEX</code>, <code class="highlighter-rouge">CAS</code>, and <code class="highlighter-rouge">PlatformServices</code> now all use the same <code class="highlighter-rouge">InstallAnywhere</code> process as does <code class="highlighter-rouge">Oracle Commerce (ATG)</code>. <code class="highlighter-rouge">ToolsAndFrameworks</code> uses a different format.</p>
+
+<p>The <code class="highlighter-rouge">Endeca</code> documentation contains references to each installation guide for <code class="highlighter-rouge">MDEX</code>, <code class="highlighter-rouge">PlatformServices</code>, <code class="highlighter-rouge">ToolsAndFrameworks</code> and <code class="highlighter-rouge">CAS</code>.</p>
+
+<p><code class="highlighter-rouge">MDEX</code> silent install correctly refers to the <code class="highlighter-rouge">USER_INSTALL_DIR</code> configuration but it was the first one to change from a shell script to binary executable installation in a previous release.</p>
+
+<p><code class="highlighter-rouge">PlatformServices</code> and <code class="highlighter-rouge">CAS</code> have changed in 11.2 but incorrectly specify <code class="highlighter-rouge">INSTALLDIR</code> instead of <code class="highlighter-rouge">USER_INSTALL_DIR</code>.</p>
+
+<p>To get the full set of InstallAnywhere installation options you can run with the <code class="highlighter-rouge">-r</code> option specifying the output response file whilst running in interactive mode. This will write out the options configuration after the interactive installation which you can then tailor for your silent installation.</p>
+
+<p>In addition the <code class="highlighter-rouge">CAS</code> silent install examples show:</p>
+
+<p><code class="highlighter-rouge">INSTALLDIR=C:/Endeca/CAS</code></p>
+
+<p>whereas in fact you should just put the root path e.g. <code class="highlighter-rouge">/opt</code> as the installation will add the <code class="highlighter-rouge">endeca/CAS</code> directories and you would end up with duplicated directories, i.e.</p>
+
+<p><code class="highlighter-rouge">USER_INSTALL_DIR=/opt/endeca/CAS would result in /opt/endeca/CAS/endeca/CAS</code></p>
+
+<p>So as always its probably best to perform an interactive installation with the <code class="highlighter-rouge">-r</code> option, then iteratively try silent installation variations until you have the desired outcome.</p>
+
+<p>I will hopefully be adding a <code class="highlighter-rouge">Chef</code> cookbook for <code class="highlighter-rouge">Endeca</code> installation to the Chef Marketplace shortly.</p>
+
+  </div><a class="u-url" href="/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Hallatech</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Hallatech</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"><li><a href="https://github.com/hallatech"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">hallatech</span></a></li><li><a href="https://www.twitter.com/jejutech"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg> <span class="username">jejutech</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>DevOps, e-commerce, Oracle Web-commerce, ATG and general cloud notes. </p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

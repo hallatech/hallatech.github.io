@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.7.3">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2018-05-15T17:45:19+09:00</updated><id>http://localhost:4000/</id><title type="html">Hallatech</title><subtitle>DevOps, e-commerce, Oracle Web-commerce, ATG and general cloud notes. </subtitle><entry><title type="html">Automating Sonarqube GitHub Pull Request Reviews with AWS Lamda and Bamboo</title><link href="http://localhost:4000/sonarqube/github/lambda/bamboo/2017/02/02/automating-sonarqube-github-pull-request-reviews-with-aws-lamda-and-bamboo.html" rel="alternate" type="text/html" title="Automating Sonarqube GitHub Pull Request Reviews with AWS Lamda and Bamboo" /><published>2017-02-02T00:00:00+09:00</published><updated>2017-02-02T00:00:00+09:00</updated><id>http://localhost:4000/sonarqube/github/lambda/bamboo/2017/02/02/automating-sonarqube-github-pull-request-reviews-with-aws-lamda-and-bamboo</id><content type="html" xml:base="http://localhost:4000/sonarqube/github/lambda/bamboo/2017/02/02/automating-sonarqube-github-pull-request-reviews-with-aws-lamda-and-bamboo.html">&lt;p&gt;The challenge: Implement the &lt;a href=&quot;https://docs.sonarqube.org/display/PLUG/GitHub+Plugin&quot;&gt;Sonar Github Plugin&lt;/a&gt; to automate &lt;code class=&quot;highlighter-rouge&quot;&gt;GitHub pull request reviews&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Basically on a pull request action an event is generated and can be sent as a payload somewhere. Github has numerous pre-configured event integrations or you can create your own webhook. Once you receive the event somewhere you need to trigger the generation of Sonarqube project properties, send to the server in preview mode and send the results back to Github. Simple in principle, but not so easy in practice!&lt;/p&gt;
+
+&lt;p&gt;This was probably one of the smallest new tasks to implement but took the longest and most frustrating to achieve, given all the little hoops to jump through along the way. Some of the issues to contend with:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Github integrations are configured to only send push events.&lt;/li&gt;
+  &lt;li&gt;Bamboo where I had to run the Sonar analysis doesn’t support pulling specific pull-requests&lt;/li&gt;
+  &lt;li&gt;Not directly related but Sonar only supports leaf node projects, so as we use typical Oracle Commerce/ATG style projects it doesn’t fit that model&lt;/li&gt;
+  &lt;li&gt;Finding a suitable intermediary to trigger the Bamboo API&lt;/li&gt;
+  &lt;li&gt;AWS Lambda issues with encrypted environment variables&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;This will be a long post given all the hurdles involved but here goes …&lt;/p&gt;
+
+&lt;p&gt;(&lt;b&gt;Note&lt;/b&gt; This was achieved with certain versions of software at the time that may now have additional features to enable this in a different way)&lt;/p&gt;
+
+&lt;h2&gt;Github integrations and events&lt;/h2&gt;
+&lt;p&gt;First lets see what integrations Github give us. Go to your repository and click on the Settings tab and select Integrations and Services&lt;/p&gt;
+
+&lt;p&gt;… to be continued …&lt;/p&gt;</content><author><name></name></author><summary type="html">The challenge: Implement the Sonar Github Plugin to automate GitHub pull request reviews.</summary></entry><entry><title type="html">Sonarqube new install fails with “Current version is too old”</title><link href="http://localhost:4000/sonarqube/2016/08/27/sonarqube-new-install-fails-with-current-version-is-too-old.html" rel="alternate" type="text/html" title="Sonarqube new install fails with &quot;Current version is too old&quot;" /><published>2016-08-27T00:00:00+09:00</published><updated>2016-08-27T00:00:00+09:00</updated><id>http://localhost:4000/sonarqube/2016/08/27/sonarqube-new-install-fails-with-current-version-is-too-old</id><content type="html" xml:base="http://localhost:4000/sonarqube/2016/08/27/sonarqube-new-install-fails-with-current-version-is-too-old.html">&lt;p&gt;Installing a fresh version of the latest &lt;code class=&quot;highlighter-rouge&quot;&gt;Sonarqube 6.0&lt;/code&gt; on an &lt;code class=&quot;highlighter-rouge&quot;&gt;EC2&lt;/code&gt; instance running &lt;code class=&quot;highlighter-rouge&quot;&gt;MySql 5.7&lt;/code&gt; resulted in the following error messages on startup with an immediate shutdown:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;2016.08.17 02:05:55 ERROR web[o.a.c.c.C.[.[.[/]] Exception sending context initialized event to listener instance of class org.sonar.server.platform.PlatformServletContextListener
+org.sonar.api.utils.MessageException: Current version is too old. Please upgrade to Long Term Support version firstly.
+2016.08.17 02:05:55 ERROR web[o.a.c.c.StandardContext] One or more listeners failed to start. Full details will be found &lt;span class=&quot;k&quot;&gt;in &lt;/span&gt;the appropriate container log file
+2016.08.17 02:05:55 ERROR web[o.a.c.c.StandardContext] Context &lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;/] startup failed due to previous errors&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;This may be misleading because its a fresh install rather than an upgrade, but the database even if empty must undergo a migration from scratch to the latest version. In my case I hadn’t given the user enough privileges and had to startup 3 times until I got the privileges correct. This was the underlying cause of the error above as by the time it tried to start properly the DB was already partially populated and so it thought a migration from a previous version was required.&lt;/p&gt;
+
+&lt;p&gt;To confirm this, run the following query against the database:&lt;/p&gt;
+
+&lt;p&gt;&lt;b&gt;SELECT * FROM schema_migrations;&lt;/b&gt;&lt;/p&gt;
+
+&lt;p&gt;The query should return nothing. If anything you need to start again.&lt;/p&gt;
+
+&lt;p&gt;The easiest solution for a new install is to drop and recreate the database and start Sonar again.&lt;/p&gt;
+
+&lt;p&gt;Solution thanks to &lt;a href=&quot;https://groups.google.com/forum/#!topic/sonarqube/4nxZhBcSdTI&quot;&gt;Julien Lancelot from SonarSource&lt;/a&gt;:&lt;/p&gt;</content><author><name></name></author><summary type="html">Installing a fresh version of the latest Sonarqube 6.0 on an EC2 instance running MySql 5.7 resulted in the following error messages on startup with an immediate shutdown:</summary></entry><entry><title type="html">Oracle Commerce imported projects not appearing in BCC</title><link href="http://localhost:4000/oracle-commerce/atg/bcc/2016/05/26/oc-imported-projects-not-appearing-in-bcc.html" rel="alternate" type="text/html" title="Oracle Commerce imported projects not appearing in BCC" /><published>2016-05-26T00:00:00+09:00</published><updated>2016-05-26T00:00:00+09:00</updated><id>http://localhost:4000/oracle-commerce/atg/bcc/2016/05/26/oc-imported-projects-not-appearing-in-bcc</id><content type="html" xml:base="http://localhost:4000/oracle-commerce/atg/bcc/2016/05/26/oc-imported-projects-not-appearing-in-bcc.html">&lt;p&gt;When importing data as projects into the BCC via one of the Oracle Commerce (ATG) utilities such as &lt;code class=&quot;highlighter-rouge&quot;&gt;startSQLRepository&lt;/code&gt;, the projects will show up on the main BCC Projects panel.&lt;/p&gt;
+
+&lt;p&gt;If you or someone has logged into the BCC after a server start but before the data import, generally the projects won’t appear. This is because the projects themselves are cached as part of the repository architecture in the same way as user/site data.&lt;/p&gt;
+
+&lt;p&gt;To make the new imported projects visible invalidate the caches via the &lt;code class=&quot;highlighter-rouge&quot;&gt;dyn/admin&lt;/code&gt; console for the BCC instance for the &lt;code class=&quot;highlighter-rouge&quot;&gt;/atg/epub/PublishingRepository&lt;/code&gt;. Invoke the &lt;code class=&quot;highlighter-rouge&quot;&gt;invalidateCaches&lt;/code&gt; method in the &lt;code class=&quot;highlighter-rouge&quot;&gt;Methods&lt;/code&gt; section near the bottom of the page. It is not necessary to invalidate external caches.&lt;/p&gt;
+
+&lt;p&gt;Then refresh the BCC home page and the projects should all appear.&lt;/p&gt;</content><author><name></name></author><summary type="html">When importing data as projects into the BCC via one of the Oracle Commerce (ATG) utilities such as startSQLRepository, the projects will show up on the main BCC Projects panel.</summary></entry><entry><title type="html">Resolving EndecaIndexing Exception 401 Unauthorised</title><link href="http://localhost:4000/oracle-commerce/endeca/2016/01/27/resolving-endeca-indexing-exception-401-unauthorised.html" rel="alternate" type="text/html" title="Resolving EndecaIndexing Exception 401 Unauthorised" /><published>2016-01-27T00:00:00+09:00</published><updated>2016-01-27T00:00:00+09:00</updated><id>http://localhost:4000/oracle-commerce/endeca/2016/01/27/resolving-endeca-indexing-exception-401-unauthorised</id><content type="html" xml:base="http://localhost:4000/oracle-commerce/endeca/2016/01/27/resolving-endeca-indexing-exception-401-unauthorised.html">&lt;p&gt;Following on from having to resolve the &lt;b&gt;401&lt;/b&gt; error on CRS initialisation I then got a similar error when running the baseline index after a full deployment from the BCC or running manually from&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;dyn/admin/nucleus/atg/commerce/endeca/index/ProductCatalogSimpleIndexingAdmin&lt;/code&gt;&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; Error    Wed Jan 27 02:50:34 +00:00 2016    1453863034854    /atg/commerce/endeca/index/ProductCatalogSimpleIndexingAdmin    ---    atg.repository.search.indexing.IndexingException: atg.repository.search.indexing.IndexingException: Exception &lt;span class=&quot;k&quot;&gt;while &lt;/span&gt;submitting configuration &lt;span class=&quot;k&quot;&gt;for &lt;/span&gt;application CRS
+&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; Error    Wed Jan 27 02:50:34 +00:00 2016    1453863034854    /atg/commerce/endeca/index/ProductCatalogSimpleIndexingAdmin    Caused by &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;c&quot;&gt;#2):com.endeca.repository.importer.ImporterException: Unable to connect to config repository on localhost.localdomain:8006 with user admin, Response:HTTP/1.1 401 Unauthorized&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;In trying to find out how to reset the password for this scenario go to the main Endeca configuration component:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;dyn/admin/nucleus/atg/endeca/ApplicationConfiguration/&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Click through to the &lt;b&gt;CredentialStoreManager&lt;/b&gt; component:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;dyn/admin/nucleus/atg/dynamo/security/opss/csf/CredentialStoreManager&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;http://localhost:4000/assets/csm1.png&quot; alt=&quot;CredentialStoreManager&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;It has a few actions to manage the credentials.&lt;/p&gt;
+
+&lt;p&gt;Select Action: &lt;i&gt;Delete Credential&lt;/i&gt; and click the &lt;i&gt;Select&lt;/i&gt; button&lt;/p&gt;
+
+&lt;p&gt;Select &lt;i&gt;ifcr&lt;/i&gt; and click the &lt;i&gt;Delete Credential&lt;/i&gt; button&lt;/p&gt;
+
+&lt;p&gt;Select Action: &lt;i&gt;Create Login Credential&lt;/i&gt; and click the &lt;i&gt;Select&lt;/i&gt; button&lt;/p&gt;
+
+&lt;p&gt;Enter:&lt;/p&gt;
+
+&lt;p&gt;MapName=&lt;b&gt;endecaToolsAndFrameworks&lt;/b&gt;&lt;br /&gt;
+Credential Key Name=&lt;b&gt;ifcr&lt;/b&gt;&lt;br /&gt;
+Username=&lt;b&gt;admin&lt;/b&gt;&lt;br /&gt;
+Password and Confirm Password = &lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;the Workbench login password&amp;gt;&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Click &lt;i&gt;Submit Credentials&lt;/i&gt; button&lt;/p&gt;
+
+&lt;p&gt;Your password has been reset and you can return to&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;dyn/admin/nucleus/atg/commerce/endeca/index/ProductCatalogSimpleIndexingAdmin&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;and do a new baseline update which should now succeed.&lt;/p&gt;</content><author><name></name></author><summary type="html">Following on from having to resolve the 401 error on CRS initialisation I then got a similar error when running the baseline index after a full deployment from the BCC or running manually from</summary></entry><entry><title type="html">Oracle JDBC Sealing Violation</title><link href="http://localhost:4000/oracle-xe/jdbc/2016/01/27/oracle-jdbc-sealing-violation.html" rel="alternate" type="text/html" title="Oracle JDBC Sealing Violation" /><published>2016-01-27T00:00:00+09:00</published><updated>2016-01-27T00:00:00+09:00</updated><id>http://localhost:4000/oracle-xe/jdbc/2016/01/27/oracle-jdbc-sealing-violation</id><content type="html" xml:base="http://localhost:4000/oracle-xe/jdbc/2016/01/27/oracle-jdbc-sealing-violation.html">&lt;p&gt;&lt;b&gt;Oracle Commerce 11.2&lt;/b&gt; now supports &lt;b&gt;JDK 1.8&lt;/b&gt;. I ran into the following error when running CIM with WebLogic 12.1.3 and JDK8:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; info    Wed Mar 04 13:07:17 CET 2015 1425470837190 atg.cim.task.ant.utility.AntLogger 
+&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;exec&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; Caused by: java.lang.SecurityException: sealing violation: package oracle.jdbc.internal is sealed&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;This error is normally attributed to multiple versions of the same class on the CLASSPATH, however in this case without a pre classpath being set, CIM derives all the CLASSPATH elements itself, and I couldn’t find any duplications.&lt;/p&gt;
+
+&lt;p&gt;As we use either JBoss or WebLogic we pull in the JDBC driver from a Maven repository via a Gradle configuration, so I normally supply this version to the JDBC library path for CIM. You can of course also use the JDBC driver in the Oracle XE installation:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/u01/app/oracle/product/11.2.0/xe/jdbc/lib/ojdbc6.jar&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;or from the WebLogic installation itself:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;path&amp;gt;/Oracle/Middleware/oracle_common/modules/oracle.jdbc_12.1.0/ojdbc*.jar&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;The mistake I made of course was to use the &lt;b&gt;ojdbc6.jar&lt;/b&gt; with &lt;b&gt;JDK8&lt;/b&gt; as I have been doing for &lt;b&gt;JDK7&lt;/b&gt; and the supported driver for Oracle XE.&lt;/p&gt;
+
+&lt;p&gt;Using the &lt;b&gt;ojdbc7.jar&lt;/b&gt; with &lt;b&gt;JDK8&lt;/b&gt; resolves the sealing violation issue.&lt;/p&gt;</content><author><name></name></author><summary type="html">Oracle Commerce 11.2 now supports JDK 1.8. I ran into the following error when running CIM with WebLogic 12.1.3 and JDK8:</summary></entry><entry><title type="html">Oracle Commerce CIM 11.2 Issues in EC2</title><link href="http://localhost:4000/oracle-commerce/cim/2016/01/26/oc-11.2-cim-issues-in-ec2.html" rel="alternate" type="text/html" title="Oracle Commerce CIM 11.2 Issues in EC2" /><published>2016-01-26T00:00:00+09:00</published><updated>2016-01-26T00:00:00+09:00</updated><id>http://localhost:4000/oracle-commerce/cim/2016/01/26/oc-11.2-cim-issues-in-ec2</id><content type="html" xml:base="http://localhost:4000/oracle-commerce/cim/2016/01/26/oc-11.2-cim-issues-in-ec2.html">&lt;p&gt;Sometimes I have to configure an all-in-one demo instance in EC2 running Oracle Commerce (ATG) on Oracle XE and there are some additional configuration changes required compared to running locally in a Vagrant VirtualBox VM. Some of these solutions have come from various channels including stackoverflow, My Oracle Support and AWS documentation. I can’t always remember the source but thanks to whoever aided me in my searches for solutions. 🙂&lt;/p&gt;
+
+&lt;p&gt;CIM fails on startup with the &lt;code class=&quot;highlighter-rouge&quot;&gt;-server option: command not found&lt;/code&gt;
+After installing all requisite software and running CIM I might get this error:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;bin/dynamoEnv.sh: line 347: &lt;span class=&quot;nt&quot;&gt;-server&lt;/span&gt;: &lt;span class=&quot;nb&quot;&gt;command &lt;/span&gt;not found
+Error: &lt;span class=&quot;nt&quot;&gt;-server&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-Djava&lt;/span&gt;.security.policy&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;lib/java.policy 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.home&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/opt/ATG/ATG11.2/home 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.root&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/opt/ATG/ATG11.2/home/.. 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.display&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 
+&lt;span class=&quot;nt&quot;&gt;-Djava&lt;/span&gt;.protocol.handler.pkgs&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;atg.net.www.protocol 
+&lt;span class=&quot;nt&quot;&gt;-Djava&lt;/span&gt;.naming.factory.url.pkgs&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;atg.jndi.url 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.modulepath&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/opt/ATG/ATG11.2/home/.. &lt;span class=&quot;nt&quot;&gt;-Xms512m&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-Xmx1024m&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-XX&lt;/span&gt;:MaxPermSize&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;128m &lt;span class=&quot;nt&quot;&gt;-XX&lt;/span&gt;:MaxNewSize&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;128m 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.server.home&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;CIM &lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.modules&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;CIM:DSS &lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.layers&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 
+&lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.dynamo.root&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;/opt/ATG/ATG11.2/home/.. &lt;span class=&quot;nt&quot;&gt;-Datg&lt;/span&gt;.cygwin&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;false &lt;/span&gt;atg.applauncher.dynamo.DynamoServerLauncher 
+&lt;span class=&quot;nt&quot;&gt;-environment&lt;/span&gt; /tmp/dynamoEnv18321.sh CIM:DSS &lt;span class=&quot;nt&quot;&gt;-classPathModules&lt;/span&gt; CIM:DSS failed&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Adding debugging to the dynamoEnv.sh before line 347 reveals &lt;code class=&quot;highlighter-rouge&quot;&gt;JAVA_VM=-server&lt;/code&gt;. If I echo the same on the command line its set. Logging out and in still results in the same setting. I tried commenting out various source options in the /home/ec2-user/.bash_profile that have been added for Oracle XE and Endeca configuration and eventually the &lt;code class=&quot;highlighter-rouge&quot;&gt;JAVA_VM&lt;/code&gt; is unset on login. The configuration causing the issue is adding the WebLogic environment setup to the profile. Removing that resolves the issues and &lt;code class=&quot;highlighter-rouge&quot;&gt;JAVA_VM&lt;/code&gt; is unset on login.&lt;/p&gt;
+
+&lt;p&gt;Remove this line if you have it:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;source $WL_HOME/server/bin/setWLSEnv.sh&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;In the dynamoEnv.sh script if JAVA_VM is unset it will be set to ATGJRE, which should also be set in the bash profile.&lt;/p&gt;
+
+&lt;p&gt;CIM fails with &lt;code class=&quot;highlighter-rouge&quot;&gt;ORA-01882: timezone region not found&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;By default an EC2 instance is configured with the UTC timezone which causes the error above when running CIM. Interactively you will just get a connection failure when testing the datasource connection. Look to the CIM logs for more details:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; Error    Tue Jan 26 06:07:58 +00:00 2016    1453788478746    
+atg.cim.worker.databaseconfig.TestJdbcConnectionValidator    ORA-01882: timezone region not found
+&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; Error    Tue Jan 26 06:07:58 +00:00 2016    1453788478746    
+atg.cim.worker.databaseconfig.TestJdbcConnectionValidator        
+java.sql.SQLException: atg.service.resourcepool.ResourcePoolException: 
+java.sql.SQLException: ORA-00604: error occurred at recursive SQL level 1
+&lt;span class=&quot;k&quot;&gt;****&lt;/span&gt; Error    Tue Jan 26 06:07:58 +00:00 2016    1453788478746    
+atg.cim.worker.databaseconfig.TestJdbcConnectionValidator    ORA-01882: timezone region not found&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Follow the &lt;a href=&quot;http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html&quot;&gt;AWS EC2 set-time&lt;/a&gt; docs to fix the issue. I normally need to change UTC to GB for an instance running in the eu-west-1 region:&lt;/p&gt;
+
+&lt;p&gt;Edit the clock configuration&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sudo vi /etc/sysconfig/clock&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Set the zone and turn UTC off&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;ZONE=”GB”
+UTC=false&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Link the timezone to the local time&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sudo ln -sf /usr/share/zoneinfo/GB /etc/localtime&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Reboot the instance and &lt;code class=&quot;highlighter-rouge&quot;&gt;CIM&lt;/code&gt; should then connect to the database correctly and continue as normal.&lt;/p&gt;</content><author><name></name></author><summary type="html">Sometimes I have to configure an all-in-one demo instance in EC2 running Oracle Commerce (ATG) on Oracle XE and there are some additional configuration changes required compared to running locally in a Vagrant VirtualBox VM. Some of these solutions have come from various channels including stackoverflow, My Oracle Support and AWS documentation. I can’t always remember the source but thanks to whoever aided me in my searches for solutions. 🙂</summary></entry><entry><title type="html">Creating localhost Oracle XE Instances on EC2</title><link href="http://localhost:4000/oracle-xe/ec2/2016/01/26/creating-localhost-oracle-xe-Instances-on-ec2.html" rel="alternate" type="text/html" title="Creating localhost Oracle XE Instances on EC2" /><published>2016-01-26T00:00:00+09:00</published><updated>2016-01-26T00:00:00+09:00</updated><id>http://localhost:4000/oracle-xe/ec2/2016/01/26/creating-localhost-oracle-xe-Instances-on-ec2</id><content type="html" xml:base="http://localhost:4000/oracle-xe/ec2/2016/01/26/creating-localhost-oracle-xe-Instances-on-ec2.html">&lt;p&gt;(Note: I’m ignoring the use of RDS in this issue)&lt;/p&gt;
+
+&lt;p&gt;When an IP changes on a restart (not reboot) of a shutdown instance or a launch of a new instance from an AMI, there can be access problems to an original Oracle XE installation.&lt;/p&gt;
+
+&lt;p&gt;In the basic install process of XE the following 2 files are created with the internal IP address of the EC2 instance.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/u01/app/oracle/product/11.2.0/xe/network/admin/listener.ora&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;/u01/app/oracle/product/11.2.0/xe/network/admin/tnsnames.ora&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;On restart they refer to the old internal IP address. If creating an AMI I would normally convert these to use localhost instead. I’m not intending to access the database from a remote instance as its an all-in-one installation.&lt;/p&gt;
+
+&lt;p&gt;Switch to the oracle user:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sudo su - oracle&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Ensure the oracle user has its environment set up correctly. Add the following to the oracle user’s .bash_profile :&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;source /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Shutdown the listener:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;lsnrctl stop&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Update the database configuration:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;sqlplus sys/password as sydba 
+alter system set LOCAL_LISTENER=&quot;(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))&quot;; 
+alter system register; 
+shutdown immediate 
+exit
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Edit each of &lt;code class=&quot;highlighter-rouge&quot;&gt;listener.ora&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;tnsnames.ora&lt;/code&gt; and change the IP address to localhost.&lt;/p&gt;
+
+&lt;p&gt;Restart the listener&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;lsnrctl start&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Restart the database&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sqlplus sys/password as sydba
+startup
+exit&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Check the listener state&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;lsnrctl status&lt;/code&gt;&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Listening Endpoints Summary...
+(DESCRIPTION=(ADDRESS=(PROTOCOL=ipc)(KEY=EXTPROC_FOR_XE)))
+(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=127.0.0.1)(PORT=1521)))
+(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=ip-xxx-xx-xx-xxx.eu-west-1.compute.internal)(PORT=8070))(Presentation=HTTP)(Session=RAW))
+Services Summary...
+Service &quot;PLSExtProc&quot; has 1 instance(s).
+Instance &quot;PLSExtProc&quot;, status UNKNOWN, has 1 handler(s) for this service...
+Service &quot;XE&quot; has 1 instance(s).
+Instance &quot;XE&quot;, status READY, has 1 handler(s) for this service...
+Service &quot;XEXDB&quot; has 1 instance(s).
+Instance &quot;XE&quot;, status READY, has 1 handler(s) for this service...
+The command completed successfully
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Test connecting through the listener. Both examples should now work which means that the JDBC access should work as well.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sqlplus system/password@XE&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;sqlplus system/password@//localhost:1521/XE&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Now on restarts or AMI burning and launch Oracle XE access should work everytime. Oracle is already installed as a service by default on installation so it will just startup as required.&lt;/p&gt;
+
+&lt;p&gt;You can also confirm the listener and its port by running&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;ps -fu oracle | grep lsnr | grep -v grep&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;Find the process id (pid) and use that as input to&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;lsof -ni -p &amp;lt;pid&amp;gt;&lt;/code&gt;&lt;/p&gt;</content><author><name></name></author><summary type="html">(Note: I’m ignoring the use of RDS in this issue)</summary></entry><entry><title type="html">Oracle Commerce CRS 11.2 EAC initialisation</title><link href="http://localhost:4000/oracle-commerce/atg/crs/2016/01/17/oc-crs-11.2-eac-initialisation.html" rel="alternate" type="text/html" title="Oracle Commerce CRS 11.2 EAC initialisation" /><published>2016-01-17T00:00:00+09:00</published><updated>2016-01-17T00:00:00+09:00</updated><id>http://localhost:4000/oracle-commerce/atg/crs/2016/01/17/oc-crs-11.2-eac-initialisation</id><content type="html" xml:base="http://localhost:4000/oracle-commerce/atg/crs/2016/01/17/oc-crs-11.2-eac-initialisation.html">&lt;p&gt;The Endeca Workbench in 11.2 has a new requirement to change the default password on first access.&lt;/p&gt;
+
+&lt;p&gt;So what happens if you follow the Commerce Reference Store (CRS) installation documentation, when you come to creating the Endeca application it installs but fails to initialise requiring you to change the password. If you then login to the workbench and change the password rerunning the process will still result in a 401 Unauthorized error similar to:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;01.26.16 08:55:18] SEVERE: Unauthorized (401): Unauthorized access to workbench. Please check your credentials in WorkbenchConfig.xml/OCS. If problem still persists, please contact your administrator.
+Occurred while executing line 3 of valid BeanShell script:
+[[
+1|
+2|
+3| IFCR.provisionSite();
+4| CAS.importDimensionValueIdMappings(&quot;CRS-dimension-value-id-manager&quot;,
+5| InitialSetup.getWorkingDir() + &quot;/test_data/initial_dval_id_mappings.csv&quot;);
+6|
+]]
+[01.26.16 08:55:18] SEVERE: Caught an exception while invoking method 'run' on object 'InitialSetup'. Releasing locks.
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;Oracle has a support doc available to guide you through setting the password and updating the Oracle Credentials Wallet. Log into your Oracle account and look for:&lt;/p&gt;
+
+&lt;p&gt;&lt;i&gt;On a New Oracle Commerce 11.2 Installation, initialize_services Script Fails With SEVERE: Unauthorized (401) (Doc ID 2075385.1)&lt;/i&gt;&lt;/p&gt;
+
+&lt;p&gt;The password for the Workbench can be changed in the workbench itself or via a POST command. I’ve not used the POST command myself but you can try:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;curl &lt;span class=&quot;nt&quot;&gt;-FoldPwd&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;admin &lt;span class=&quot;nt&quot;&gt;-FnewPwd&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;newpassword &lt;span class=&quot;nt&quot;&gt;-FnewPwdConfirm&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;newpassword http://admin:admin@localhost:8006/ifcr/system/userManager/user/admin.changePassword.json&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;The change for the OCW looks like this according to the document:&lt;/p&gt;
+
+&lt;p&gt;Navigate to &lt;code class=&quot;highlighter-rouge&quot;&gt;$ENDECA_TOOLS_ROOT/credential_store/bin&lt;/code&gt; and execute:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;manage_credentials.sh add &lt;span class=&quot;nt&quot;&gt;--config&lt;/span&gt; ../../server/workspace/credential_store/jps-config.xml &lt;span class=&quot;nt&quot;&gt;--mapName&lt;/span&gt; endecaToolsAndFrameworks –-user admin &lt;span class=&quot;nt&quot;&gt;--key&lt;/span&gt; ifcr &lt;span class=&quot;nt&quot;&gt;--type&lt;/span&gt; password&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;and this doesn’t work as is, so:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;use ./manage_crendentials.sh to invoke the script&lt;/li&gt;
+  &lt;li&gt;the parameters for –key and –user need to be switched around, so:&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;manage_credentials.sh add &lt;span class=&quot;nt&quot;&gt;--config&lt;/span&gt; ../../server/workspace/credential_store/jps-config.xml &lt;span class=&quot;nt&quot;&gt;--mapName&lt;/span&gt; endecaToolsAndFrameworks &lt;span class=&quot;nt&quot;&gt;--key&lt;/span&gt; ifcr –-user admin &lt;span class=&quot;nt&quot;&gt;--type&lt;/span&gt; password&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;(&lt;b&gt;Note:&lt;/b&gt; don’t put in your actual password, you will be prompted for it).&lt;/p&gt;
+
+&lt;p&gt;Once the passwords have been co-ordinated between the workbench and the OCW you can retry CIM or just run what CIM is running from the command line by navigating to:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;&amp;lt;path-to-endeca-apps&amp;gt;/CRS/control&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;and executing:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;nv&quot;&gt;$.&lt;/span&gt;/initialize_services.sh &lt;span class=&quot;nt&quot;&gt;--force&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;</content><author><name></name></author><summary type="html">The Endeca Workbench in 11.2 has a new requirement to change the default password on first access.</summary></entry><entry><title type="html">Oracle Commerce Endeca 11.2 Silent Installation</title><link href="http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html" rel="alternate" type="text/html" title="Oracle Commerce Endeca 11.2 Silent Installation" /><published>2016-01-16T00:00:00+09:00</published><updated>2016-01-16T00:00:00+09:00</updated><id>http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation</id><content type="html" xml:base="http://localhost:4000/oracle-commerce/endeca/2016/01/16/oracle-commerce-endeca-11.2-silent-installation.html">&lt;p&gt;I had some issues getting the silent installation to work for the new &lt;code class=&quot;highlighter-rouge&quot;&gt;Endeca&lt;/code&gt; installations for the newly released 11.2.&lt;/p&gt;
+
+&lt;p&gt;Oracle have been upgrading the installer processes with each release lately. As of 11.2 &lt;code class=&quot;highlighter-rouge&quot;&gt;MDEX&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;CAS&lt;/code&gt;, and &lt;code class=&quot;highlighter-rouge&quot;&gt;PlatformServices&lt;/code&gt; now all use the same &lt;code class=&quot;highlighter-rouge&quot;&gt;InstallAnywhere&lt;/code&gt; process as does &lt;code class=&quot;highlighter-rouge&quot;&gt;Oracle Commerce (ATG)&lt;/code&gt;. &lt;code class=&quot;highlighter-rouge&quot;&gt;ToolsAndFrameworks&lt;/code&gt; uses a different format.&lt;/p&gt;
+
+&lt;p&gt;The &lt;code class=&quot;highlighter-rouge&quot;&gt;Endeca&lt;/code&gt; documentation contains references to each installation guide for &lt;code class=&quot;highlighter-rouge&quot;&gt;MDEX&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;PlatformServices&lt;/code&gt;, &lt;code class=&quot;highlighter-rouge&quot;&gt;ToolsAndFrameworks&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;CAS&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;MDEX&lt;/code&gt; silent install correctly refers to the &lt;code class=&quot;highlighter-rouge&quot;&gt;USER_INSTALL_DIR&lt;/code&gt; configuration but it was the first one to change from a shell script to binary executable installation in a previous release.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;PlatformServices&lt;/code&gt; and &lt;code class=&quot;highlighter-rouge&quot;&gt;CAS&lt;/code&gt; have changed in 11.2 but incorrectly specify &lt;code class=&quot;highlighter-rouge&quot;&gt;INSTALLDIR&lt;/code&gt; instead of &lt;code class=&quot;highlighter-rouge&quot;&gt;USER_INSTALL_DIR&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;To get the full set of InstallAnywhere installation options you can run with the &lt;code class=&quot;highlighter-rouge&quot;&gt;-r&lt;/code&gt; option specifying the output response file whilst running in interactive mode. This will write out the options configuration after the interactive installation which you can then tailor for your silent installation.&lt;/p&gt;
+
+&lt;p&gt;In addition the &lt;code class=&quot;highlighter-rouge&quot;&gt;CAS&lt;/code&gt; silent install examples show:&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;INSTALLDIR=C:/Endeca/CAS&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;whereas in fact you should just put the root path e.g. &lt;code class=&quot;highlighter-rouge&quot;&gt;/opt&lt;/code&gt; as the installation will add the &lt;code class=&quot;highlighter-rouge&quot;&gt;endeca/CAS&lt;/code&gt; directories and you would end up with duplicated directories, i.e.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;USER_INSTALL_DIR=/opt/endeca/CAS would result in /opt/endeca/CAS/endeca/CAS&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;So as always its probably best to perform an interactive installation with the &lt;code class=&quot;highlighter-rouge&quot;&gt;-r&lt;/code&gt; option, then iteratively try silent installation variations until you have the desired outcome.&lt;/p&gt;
+
+&lt;p&gt;I will hopefully be adding a &lt;code class=&quot;highlighter-rouge&quot;&gt;Chef&lt;/code&gt; cookbook for &lt;code class=&quot;highlighter-rouge&quot;&gt;Endeca&lt;/code&gt; installation to the Chef Marketplace shortly.&lt;/p&gt;</content><author><name></name></author><summary type="html">I had some issues getting the silent installation to work for the new Endeca installations for the newly released 11.2.</summary></entry></feed>

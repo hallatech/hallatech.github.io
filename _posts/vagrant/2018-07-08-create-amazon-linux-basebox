@@ -1,0 +1,72 @@
+---
+layout: "post"
+title: "Create an Amazon Linux 2 basebox for Vagrant."
+categories: vagrant amazon linux basebox
+---
+
+Recently AWS released their Linux 2 and as part of that release included a downloaded VM for development and on-prem usage.
+See https://aws.amazon.com/amazon-linux-2/ for further details.
+
+They also released a Docker image which I played with first: https://hub.docker.com/_/amazonlinux/
+So I thought I would try create a Vagrant basebox from the VM.
+
+Following the basic steps as described here https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-linux-2-virtual-machine.html I created the seed.iso and downloaded the VirtualBox image.
+
+To create the basebox I did the following:
+
+1. In the VirtualBox Gui, create a new VM and work through the settings screens
+    - Name: AmazonLinux2
+    - Type: Linux
+    - Version: Linux 2.6 / 3.x / 4.x (64-bit)
+    - Memory Size : Accept default size
+    - Hard Disk: Create a Virtual Hard Disk now (default option) (Optionally select no VDI and accept warning)
+    - Hard Disk File Type: Accept default - VDI
+    - Storage on physical hard disk: Dynamically allocated
+    - File location and size: Accept name and size
+    - Click Create
+
+2. In the newly created VM select Storage
+    - Under Controller: IDE, select the Empty CD, Click the CD image on the right and choose your seed.iso created as per the AWS instructions
+    - Under Controller: SATA, select the <name>.vdi disk, click the HDD image on the right and choose the amazon linux VDI downloaded as per AWS instructions.
+    - Click OK to save
+
+3. Start the new VM - double click the VM in the list. Once booted r
+    - remove the seed.iso from the Storage options
+    - Open the contents of the VirtualBox app. Uner the MacOs dir locate the VBoxGuestAdditions.iso and copy to another location
+    - Add the VBoxGuestAdditions.iso as an optical drive
+    - Restart the VM
+    - login as root/vagrant
+    - If requested run `sudo yum -y update` to update security patches
+    - Mount the GuestAdditions: `mount -r /dev/cdrom /media`
+    - `cd /media`
+    - `./VBoxLinuxAdditions.run`
+    - this fails because the kernel headers are different
+
+    Check the installed headers against the named headers
+    - `uname -r`
+    - `ls -la /usr/ssrc/kernel/<version>
+    - Can try `yum downgrade kernel-headers`. This works but the above dir is unchanged and the problem still occurs.
+    - look at /lib/modules/... and the symlinks to source and build are invalid due to the invalid version in /usr/src.
+    - Here we get stuck at this point and can't continue ...
+
+The rest below can be done when the kernel problem is fixed and the GA has been applied correctly.
+
+Once the VM has booted login as ec2-user with the password added in user-data file in the seed.iso. Make a few changes as recommended by vagrant.
+    - sudo vi /etc/ssh/sshd_config
+    - sudo systemctl restart sshd.service
+    - sudo systemctl enable sshd.service
+    - sudo visudo
+        - ec2-user ALL=(ALL) NOPASSWD:ALL
+        - The line `Defaults requiretty` should be removed but it has already been removed.
+
+4. Shut the VM down.
+
+5. Navigate to your VirtualBox directory, e.g. `~/VirtualBox VMs` and use Vagrant to pack the VM into a basebox image.
+
+    vagrant package --base AmazonLinux2 --output amazon-linux-2
+
+6. Install the basebox. Use the same name as the VM or a different basebox name.
+
+    vagrant box add --name amazon-linux-2 amazon-linux-2
+
+7. In a new directory create your Vagrantfile
